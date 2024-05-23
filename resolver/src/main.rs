@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
 
-use crate::{deps::DepsGraph, locator::PackageLocations};
+use crate::{build_graph::PartialDepsGraph, locator::PackageLocations};
 
+mod build_graph;
 mod deps;
 mod locator;
 mod package;
 
 fn main() -> Result<()> {
-    let mut graph = DepsGraph::default();
+    let mut graph = PartialDepsGraph::default();
 
     for flake in ["..#core", "..#extra"] {
         graph
@@ -18,7 +19,7 @@ fn main() -> Result<()> {
             .with_context(|| format!("error getting dependencies for flake {flake}"))?;
     }
 
-    dbg!(graph);
+    dbg!(graph.finalize());
 
     Ok(())
 }
