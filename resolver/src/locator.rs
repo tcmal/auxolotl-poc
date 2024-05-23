@@ -4,11 +4,8 @@
 use std::{collections::HashMap, process::Command};
 
 use anyhow::{anyhow, bail, Result};
-use rnix::{
-    ast::{self, AttrSet, Expr, HasEntry, Lambda},
-    SyntaxKind, SyntaxNode,
-};
-use rowan::{ast::AstNode, WalkEvent};
+use regex::Regex;
+use rnix::ast::{self, AttrSet, Expr, HasEntry};
 
 #[derive(Debug, Clone)]
 pub struct LambdaLocs(HashMap<String, SourcePos>);
@@ -37,8 +34,11 @@ impl LambdaLocs {
 
     /// Extract locations of lambdas from the output of `nix eval`.
     pub fn from_eval_output(out: &str) -> Result<Self> {
-        let parse = rnix::Root::parse(out);
-        // parse will contain errors, because of the <<lambda>> bits.
+        // Replace <<lambda>> bits with strings
+        let re = Regex::new(r"«lambda [^@]*@ ([^»]*)»").unwrap();
+        let out = re.replace_all(out, r#""$1""#);
+
+        let parse = rnix::Root::parse(&out);
 
         let Some(Expr::AttrSet(attrs)) = parse.tree().expr() else {
             bail!("result of evaluating lambdas was not an attribute set");
@@ -67,13 +67,12 @@ impl LambdaLocs {
 
                 let name = ident.ident_token().unwrap().text().to_string();
 
-                let Some(l) = attrpath_value.value() else {
+                let Some(Expr::Str(s)) = attrpath_value.value() else {
                     bail!("invalid value for attrpath value");
                 };
 
-                let Some(pos) = Self::get_lambda_position(l.syntax()) else {
-                    bail!("failed to extract position of lambda");
-                };
+                let pos = Self::get_lambda_position(s)
+                    .ok_or_else(|| anyhow!("failed to extract lambda position"))?;
 
                 self.0.insert(format!("{prefix}{name}"), pos);
             }
@@ -85,25 +84,18 @@ impl LambdaLocs {
     /// Extract the position of the lambda from a syntax tree entry.
     /// Since we're parsing the output of `nix eval`, this involves messing around with error nodes and stuff.
     /// This is really scuffed: there's probably a better way to do it.
-    fn get_lambda_position(l: &SyntaxNode) -> Option<SourcePos> {
-        for c in l.preorder() {
-            if let WalkEvent::Enter(c) = c {
-                if c.kind() != SyntaxKind::NODE_ERROR {
-                    continue;
-                }
-                let text = dbg!(c.text().to_string());
-                let (file, text) = text.split_once(':')?;
-                let (row, text) = text.split_once(':')?;
-                let (col, _) = text.split_once('»')?;
+    fn get_lambda_position(l: ast::Str) -> Option<SourcePos> {
+        let parts = l.normalized_parts();
+        let ast::InterpolPart::Literal(text) = parts.get(0)? else {
+            return None;
+        };
+        let (file, text) = text.split_once(':')?;
+        let (row, col) = text.split_once(':')?;
 
-                return Some(SourcePos {
-                    file: file.to_string(),
-                    row: row.parse().ok()?,
-                    col: col.parse().ok()?,
-                });
-            }
-        }
-
-        None
+        return Some(SourcePos {
+            file: file.to_string(),
+            row: row.parse().ok()?,
+            col: col.parse().ok()?,
+        });
     }
 }
