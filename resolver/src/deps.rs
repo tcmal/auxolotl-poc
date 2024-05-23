@@ -2,11 +2,7 @@
 
 use std::{collections::HashMap, fs::File, io::Read};
 
-use anyhow::{anyhow, bail, Result};
-use petgraph::{
-    dot::{Config, Dot},
-    Graph,
-};
+use anyhow::{anyhow, bail, Context, Result};
 use rnix::{
     ast::{self, Expr, HasEntry},
     Root,
@@ -16,45 +12,26 @@ use rowan::{ast::AstNode, TextSize};
 use crate::{locator::PackageLocations, package::Package};
 
 /// A dependency graph, containing one or more flakes
-#[derive(Debug, Clone)]
-pub struct DepsGraph(Graph<Package, usize>);
+#[derive(Debug, Clone, Default)]
+pub struct DepsGraph(HashMap<String, (Package, Vec<String>)>);
 
 impl DepsGraph {
     /// Build a dependency graph from the given package locations.
     /// This expects each package declaration to point to a `callPackages` style lambda, which
     /// destructures its required dependencies by name.
     /// TODO: Later, this will attempt to read nested attributes by checking for `let inherit` forms right after.
-    pub fn from_locs(ps: PackageLocations) -> Result<Self> {
-        // We can't immediately build the graph because of forward referencing, so first build a map of name to dependencies
-        let map = ps
-            .into_iter()
-            .map(|p| Self::get_dep_names(p))
-            .collect::<Result<HashMap<_, _>>>()?;
-
-        let mut g = Graph::new();
-
-        // Insert each one into the graph
-        let ni_map = map
-            .iter()
-            .map(|(p, _)| (&p.name, g.add_node(p.clone())))
-            .collect::<HashMap<_, _>>();
-
-        // Then actually create the nodes
-        for (p, deps) in map.iter() {
-            let from = ni_map.get(&p.name).unwrap();
-            for dep in deps {
-                let to = ni_map
-                    .get(&dep)
-                    .ok_or_else(|| anyhow!("{} has missing dependency {}", p.name, dep))?;
-                g.add_edge(*from, *to, 0);
-            }
+    pub fn add_from_locs(&mut self, ps: PackageLocations) -> Result<()> {
+        for p in ps {
+            let deps = Self::get_dep_names(&p)
+                .with_context(|| format!("error processing package {}", p.name))?;
+            self.0.insert(p.name.clone(), (p, deps));
         }
 
-        Ok(Self(g))
+        Ok(())
     }
 
     /// Get the names of all dependencies of the given package, by statically analysing nix code.
-    fn get_dep_names(p: Package) -> Result<(Package, Vec<String>)> {
+    fn get_dep_names(p: &Package) -> Result<Vec<String>> {
         // load file
         let content = {
             let mut f = File::open(&p.pos.file)?;
@@ -94,12 +71,7 @@ impl DepsGraph {
 
         // TODO: check for let inherit ()...
 
-        Ok((p, deps))
-    }
-
-    /// Render the dependency graph as a graphviz string
-    pub fn to_graphviz(&self) -> String {
-        format!("{}", Dot::with_config(&self.0, &[Config::EdgeNoLabel]))
+        Ok(deps)
     }
 }
 
