@@ -1,12 +1,16 @@
 use anyhow::Result;
 
-use crate::locator::LambdaLocs;
+use crate::{deps::DepsGraph, locator::PackageLocations};
+
+mod deps;
 mod locator;
+mod package;
 
 fn main() -> Result<()> {
-    let locs = LambdaLocs::for_flake_spec("..#core")?;
+    let locs = PackageLocations::for_flake_spec("..#core")?;
+    let graph = DepsGraph::from_locs(locs)?;
 
-    dbg!(locs);
+    println!("{}", graph.to_graphviz());
 
     Ok(())
 }

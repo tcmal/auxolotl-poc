@@ -1,24 +1,32 @@
 //! Code for extracting the positions of package lambdas.
-//! This uses the `*.lambdas` outputs of the flake.
+//! This uses the `*.lambdas` outputs of the flake, and parses the output of `nix eval` to get the source locations.
+//! Very hacky
 
-use std::{collections::HashMap, process::Command};
+use std::process::Command;
 
 use anyhow::{anyhow, bail, Result};
 use regex::Regex;
 use rnix::ast::{self, AttrSet, Expr, HasEntry};
 
-#[derive(Debug, Clone)]
-pub struct LambdaLocs(HashMap<String, SourcePos>);
+use crate::package::{Package, SourcePos};
 
-/// Identififes a position in nix code
+/// A list of packages, with location information
 #[derive(Debug, Clone)]
-pub struct SourcePos {
-    pub file: String,
-    pub row: usize,
-    pub col: usize,
+pub struct PackageLocations(Vec<Package>);
+
+impl IntoIterator for PackageLocations {
+    type Item = Package;
+
+    type IntoIter = <Vec<Package> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
-impl LambdaLocs {
+impl PackageLocations {
+    /// Extract package locations from a given flake specification
+    /// The flake must have an output `.lambdas`.
     pub fn for_flake_spec(spec: &str) -> Result<Self> {
         let out = Command::new("nix")
             .args(["eval", &format!("{spec}.lambdas")])
@@ -44,7 +52,7 @@ impl LambdaLocs {
             bail!("result of evaluating lambdas was not an attribute set");
         };
 
-        let mut this = Self(HashMap::new());
+        let mut this = Self(Default::default());
         this.walk_attrset("", &attrs)?;
 
         Ok(this)
@@ -67,6 +75,7 @@ impl LambdaLocs {
 
                 let name = ident.ident_token().unwrap().text().to_string();
 
+                // TODO: deal with nested attribute sets
                 let Some(Expr::Str(s)) = attrpath_value.value() else {
                     bail!("invalid value for attrpath value");
                 };
@@ -74,7 +83,10 @@ impl LambdaLocs {
                 let pos = Self::get_lambda_position(s)
                     .ok_or_else(|| anyhow!("failed to extract lambda position"))?;
 
-                self.0.insert(format!("{prefix}{name}"), pos);
+                self.0.push(Package {
+                    name: format!("{prefix}{name}"),
+                    pos,
+                });
             }
         }
 

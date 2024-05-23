@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
+petgraph = "0.6.5"
 regex = "1.10.4"
 rnix = "0.11.0"
 rowan = "0.15.15"
