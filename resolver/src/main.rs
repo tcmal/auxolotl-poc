@@ -19,7 +19,9 @@ fn main() -> Result<()> {
             .with_context(|| format!("error getting dependencies for flake {flake}"))?;
     }
 
-    dbg!(graph.finalize());
+    let graph = graph.finalize()?;
+
+    println!("{}", graph.to_graphviz());
 
     Ok(())
 }

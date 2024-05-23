@@ -76,7 +76,10 @@ impl PartialDepsGraph {
     }
 
     /// Finalize the dependency graph, checking that there are no dangling references.
-    pub fn finalize(self) -> Result<DepsGraph> {
+    pub fn finalize(mut self) -> Result<DepsGraph> {
+        // Sort the list of packages, so that we get a consistent ordering between runs
+        self.0.sort_by(|(p1, _), (p2, _)| p1.name.cmp(&p2.name));
+
         let g = self
             .0
             .iter()
