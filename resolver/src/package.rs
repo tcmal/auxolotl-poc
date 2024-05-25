@@ -8,6 +8,9 @@ pub struct Package {
 
     /// The position of the lambda which returns the derivation
     pub pos: SourcePos,
+
+    /// Slug describing the flake this came from.
+    pub flake_slug: String,
 }
 
 impl Display for Package {

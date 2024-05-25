@@ -88,11 +88,11 @@ impl PartialDepsGraph {
                 let this = &self;
                 deps.iter().map(move |dep| -> Result<(usize, usize)> {
                     Ok((
-                        i,
                         this.0
                             .iter()
                             .position(|(p, _)| p.name == *dep)
                             .ok_or_else(|| anyhow!("{} has missing dependency {}", p.name, dep))?,
+                        i,
                     ))
                 })
             })

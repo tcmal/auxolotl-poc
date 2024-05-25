@@ -27,7 +27,7 @@ impl IntoIterator for PackageLocations {
 impl PackageLocations {
     /// Extract package locations from a given flake specification
     /// The flake must have an output `.lambdas`.
-    pub fn for_flake_spec(spec: &str) -> Result<Self> {
+    pub fn for_flake_spec(spec: &str, flake_slug: &str) -> Result<Self> {
         let out = Command::new("nix")
             .args(["eval", &format!("{spec}.lambdas")])
             .output()?;
@@ -37,11 +37,11 @@ impl PackageLocations {
         }
         let out = String::from_utf8(out.stdout)?;
 
-        Self::from_eval_output(&out)
+        Self::from_eval_output(&out, flake_slug)
     }
 
     /// Extract locations of lambdas from the output of `nix eval`.
-    pub fn from_eval_output(out: &str) -> Result<Self> {
+    pub fn from_eval_output(out: &str, flake_slug: &str) -> Result<Self> {
         // Replace <<lambda>> bits with strings
         let re = Regex::new(r"«lambda [^@]*@ ([^»]*)»").unwrap();
         let out = re.replace_all(out, r#""$1""#);
@@ -53,13 +53,13 @@ impl PackageLocations {
         };
 
         let mut this = Self(Default::default());
-        this.walk_attrset("", &attrs)?;
+        this.walk_attrset("", &attrs, flake_slug)?;
 
         Ok(this)
     }
 
     /// Walk the parsed attribute set, adding encountered lambdas. `prefix` is used to deal with recursive attribute sets.
-    fn walk_attrset(&mut self, prefix: &str, set: &AttrSet) -> Result<()> {
+    fn walk_attrset(&mut self, prefix: &str, set: &AttrSet, flake_slug: &str) -> Result<()> {
         // note that we only have to parse the output of `nix eval`, so we can limit things a bit
         for entry in set.entries() {
             if let ast::Entry::AttrpathValue(attrpath_value) = entry {
@@ -86,6 +86,7 @@ impl PackageLocations {
                 self.0.push(Package {
                     name: format!("{prefix}{name}"),
                     pos,
+                    flake_slug: flake_slug.to_string(),
                 });
             }
         }
