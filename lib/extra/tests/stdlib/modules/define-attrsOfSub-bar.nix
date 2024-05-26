@@ -1,0 +1,1 @@
+{ attrsOfSub.bar = { }; }
