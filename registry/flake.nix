@@ -7,7 +7,7 @@
   };
 
   outputs =
-    {
+    inp@{
       self,
       auxlib,
       core,
@@ -25,5 +25,7 @@
         core = core.lambdas;
         python = python.lambdas;
       };
+
+      packages.${config.system} = import ./deps.nix inp;
     };
 }

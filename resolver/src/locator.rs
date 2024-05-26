@@ -84,19 +84,31 @@ impl PackageLocations {
                 let name = ident.ident_token().unwrap().text().to_string();
 
                 // TODO: deal with nested attribute sets
-                let Some(Expr::Str(s)) = attrpath_value.value() else {
-                    bail!("invalid value for attrpath value");
-                };
+                match attrpath_value.value() {
+                    // Position of lambda (thanks to earlier regex replacement)
+                    Some(Expr::Str(s)) => {
+                        let pos = Self::get_lambda_position(s)
+                            .ok_or_else(|| anyhow!("failed to extract lambda position"))?;
 
-                let pos = Self::get_lambda_position(s)
-                    .ok_or_else(|| anyhow!("failed to extract lambda position"))?;
+                        let full_path = format!("{prefix}{name}");
 
-                let name = format!("{prefix}{name}");
-                self.0.push(Package {
-                    flake_slug: name.split(".").next().unwrap().to_string(),
-                    name,
-                    pos,
-                });
+                        let (flake_slug, name) = full_path
+                            .split_once(".")
+                            .expect("every package must be nested at least once");
+                        self.0.push(Package {
+                            name: name.to_string(),
+                            flake_slug: flake_slug.to_string(),
+                            pos,
+                        });
+                    }
+
+                    // Nested attribute set
+                    Some(Expr::AttrSet(a)) => {
+                        self.walk_attrset(&format!("{prefix}{ident}."), &a)?
+                    }
+
+                    x => bail!("unrecognised value type for attribute: {:?}", x),
+                }
             }
         }
 
@@ -119,5 +131,9 @@ impl PackageLocations {
             row: row.parse().ok()?,
             col: col.parse().ok()?,
         });
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }

@@ -5,3 +5,10 @@ set -ex
 
 cd core/ && nix flake update auxlib && cd ..
 cd python/ && nix flake update auxlib && cd ..
+cd resolver/ && nix flake update auxlib && cd ..
+
+cd registry/
+nix flake update auxlib
+nix flake update core
+nix flake update python
+cd ..
