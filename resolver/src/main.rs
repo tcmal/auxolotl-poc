@@ -15,8 +15,8 @@ mod deps;
 mod locator;
 mod package;
 
-const GRAPH_OUT: &'static str = "./registry/deps.svg";
-const NIX_OUT: &'static str = "./registry/deps.nix";
+const GRAPH_OUT: &'static str = "./registry/pkgs.svg";
+const NIX_OUT: &'static str = "./registry/pkgs.nix";
 
 fn main() -> Result<()> {
     let locs = PackageLocations::for_flake_spec("./registry")?;

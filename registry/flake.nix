@@ -26,6 +26,6 @@
         python = python.lambdas;
       };
 
-      packages.${config.system} = import ./deps.nix inp;
+      packages.${config.system} = import ./pkgs.nix inp;
     };
 }

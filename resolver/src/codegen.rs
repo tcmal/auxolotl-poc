@@ -34,14 +34,18 @@ impl DepsGraph {
                                 (
                                     pkg.name.to_string(),
                                     format!(
-                                        "{}.{} {{ inherit ({}) {}; }}",
+                                        "{}.{} {{ {} }}",
                                         pkg.flake_slug,
                                         pkg.name,
-                                        fin,
                                         self.g
                                             .edges_directed(pkg_idx.into(), Direction::Incoming)
-                                            .map(|dep_idx| &self.get(dep_idx.source().index()).name)
-                                            .fold(String::new(), |a, b| a + b + " ")
+                                            .map(|dep_idx| format!(
+                                                "{} = {}.{}",
+                                                &self.get(dep_idx.source().index()).name,
+                                                fin,
+                                                &self.get(dep_idx.source().index()).name
+                                            ))
+                                            .fold(String::new(), |a, b| format!("{a} {b};"))
                                     ),
                                 )
                             }))

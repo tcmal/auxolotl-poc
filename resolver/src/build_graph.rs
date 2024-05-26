@@ -5,7 +5,7 @@ use std::{fs::File, io::Read};
 use anyhow::{anyhow, bail, Context, Result};
 use petgraph::Graph;
 use rnix::{
-    ast::{self, Expr, HasEntry},
+    ast::{self, Entry, Expr, HasEntry},
     Root,
 };
 use rowan::{ast::AstNode, TextSize};
@@ -62,7 +62,13 @@ impl PartialDepsGraph {
             ast::Param::Pattern(p) => {
                 for e in p.pat_entries() {
                     let dep_name = e.ident().unwrap().ident_token().unwrap().text().to_string();
-                    deps.push(dep_name);
+                    // if the argument has a default, it's used to specify attributes that the argument must have
+                    // ie `python3Packages ? {pip = {}}` specifies a dependency on `python3Packages.pip`
+                    if let Some(default) = e.default() {
+                        deps.extend(Self::parse_dep_default(&dep_name, &default)?);
+                    } else {
+                        deps.push(dep_name);
+                    }
                 }
             }
             ast::Param::IdentParam(_) => {
@@ -70,9 +76,40 @@ impl PartialDepsGraph {
             }
         };
 
-        // TODO: check for let inherit ()...
-
         Ok(deps)
+    }
+
+    /// Parse the default expression for a function argument named `prefix`, returning a list of dependencies
+    fn parse_dep_default(prefix: &str, e: &Expr) -> Result<Vec<String>> {
+        match e {
+            Expr::AttrSet(a) => {
+                let mut acc = Vec::new();
+                for ent in a.entries() {
+                    // TODO: something like:
+                    //   {topLevel ? {subAttr = {pkg1 = {}; pkg2 = {};};}, ...}: ()
+                    // should maybe be supported
+                    let Entry::AttrpathValue(v) = ent else {
+                        bail!("attribute set in default for argument should only have assignments");
+                    };
+                    let path = v
+                        .attrpath()
+                        .unwrap()
+                        .attrs()
+                        .flat_map(|attr| match attr {
+                            ast::Attr::Ident(ident) => Some(ident),
+                            _ => None,
+                        })
+                        .map(|i| i.ident_token().unwrap().text().to_string())
+                        .fold(prefix.to_string(), |a, b| format!("{a}.{b}"));
+
+                    acc.push(path);
+                }
+                Ok(acc)
+            }
+            Expr::Ident(i) => Ok(vec![i.ident_token().unwrap().text().to_string()]),
+            // some other default: specifies no extra dependencies
+            _ => Ok(vec![]),
+        }
     }
 
     /// Finalize the dependency graph, checking that there are no dangling references.
