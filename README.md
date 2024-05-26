@@ -29,7 +29,7 @@ Our proof-of-concept has these repositories:
 
   - `lib` - pure, system-agnostic helper functions that don't depend on anything. mostly from [auxolotl/lib](https://github.com/auxolotl/lib)
   - `core` - minimal set of packages considered vital for everything else. currently, just `stdenv` stuff.
-  - `python` - sig repositories, containing more packages.
+  - `python`, ... - sig repositories, containing more packages.
   - `registry` - generated nix code, which pulls in `core` and sig repos and wires them all together.
   - `resolver` - code to generate the `registry`
 
@@ -37,9 +37,10 @@ Our proof-of-concept has these repositories:
 
 Actual package code goes in `core` or one of the sig repos, using the [`by-name` convention](https://github.com/NixOS/nixpkgs/blob/master/pkgs/by-name/README.md). In practice, some packages might need more complex code (particularly stdenv/bootstrapping stuff).
 
-For most packages, we expect the same `callPackage` style that `nixpkgs` uses: A lambda which destructures the dependencies it needs from its argument, and ignores everything else.
+For packages, we expect the same `callPackage` style that `nixpkgs` uses: A lambda which destructures the dependencies it needs from its argument, and ignores everything else.
 
 TODO: nested attribute set dependencies.
+TODO: not just packages - functions, etc.
 
 For example, `hello` as defined in `core/by-name/he/hello/default.nix`:
 
@@ -56,7 +57,8 @@ stdenv.mkDerivation rec {
 }
 ```
 
-TODO: no actual flake dependencies between packages.
+Note that there are no flake dependencies between `core`, `python`, etc.
+This allows the dependencies between repositories to have cycles (core using packages from python, python using packages from core) so long as actual package dependencies aren't circular.
 
 ### Wiring them up
 
@@ -113,3 +115,48 @@ lvl2
 ```
 
 We also render our dependency graph with graphviz and put it in `registry/pkgs.svg`.
+
+You can try this out by running `./scripts/update-registry.sh`.
+
+## Summary
+
+  - Repositories don't directly depend on each other
+  - Each repository outputs an attribute set of callPackage-style lambdas
+  - We infer each package's dependencies by parsing those lambdas, and wire everything up in `registry` (ensuring there are no circular dependencies)
+
+Pros:
+
+  - Multiple repositories, which should make swapping things out easier
+  - `callPackage` style is familiar, allows easier porting from `nixpkgs`
+  - Dependencies between packages are statically declared, allowing for easy analysis
+  - ...?
+
+Cons:
+
+  - Another tool provides more maintenance burden
+  - Local setup is more complex, especially if working on multiple repositories
+  - Resolver is pretty hacky, may break with different nix versions
+  - Flakes don't provide lazy loading of only parts of the package tree. This could be solved in a non-flake environment using IFD.
+  - ...?
+
+### Open questions
+
+#### Overlays
+
+Some suggestions [here](https://forum.aux.computer/t/sig-repos-how-should-they-work/416/58)
+
+#### Versioning across repositories
+
+If we intend to provide point releases then those need to be synchronised across all of the repositories, which seems complex.
+
+A PR to one repository may affect building of packages in other ones, which we need some way to deal with.
+
+Similarly, some PRs will end up needing to be spread across multiple repositories - how can we deal with this?
+
+#### Tools for working with single repository locally
+
+Since packages discard everything besides the dependencies they need, you could simply call the package with the entire registry, essentially doing what `nixpkgs` does.
+
+However, this will be more complicated for adding packages / changing package dependencies.
+
+Possibly users could just have their local versions as overlays on top of the current version (see above).
