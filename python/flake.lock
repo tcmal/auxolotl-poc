@@ -1,0 +1,23 @@
+{
+  "nodes": {
+    "auxlib": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-aJZzu9gRLOcf6YN1/103azIGSVty/Fh3C+Q7qEHsT3Q=",
+        "path": "../lib",
+        "type": "path"
+      },
+      "original": {
+        "path": "../lib",
+        "type": "path"
+      }
+    },
+    "root": {
+      "inputs": {
+        "auxlib": "auxlib"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

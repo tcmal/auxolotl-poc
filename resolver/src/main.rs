@@ -11,14 +11,7 @@ mod package;
 fn main() -> Result<()> {
     let mut graph = PartialDepsGraph::default();
 
-    for flake in ["core", "extra"] {
-        graph
-            .add_from_locs(
-                PackageLocations::for_flake_spec(&format!("..#{}", flake), flake)
-                    .with_context(|| format!("error getting locations for flake {flake}"))?,
-            )
-            .with_context(|| format!("error getting dependencies for flake {flake}"))?;
-    }
+    graph.add_from_locs(PackageLocations::for_flake_spec("./registry")?)?;
 
     let graph = graph.finalize()?;
     let levels = graph.to_levels();

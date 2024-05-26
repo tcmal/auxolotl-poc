@@ -26,22 +26,30 @@ impl IntoIterator for PackageLocations {
 
 impl PackageLocations {
     /// Extract package locations from a given flake specification
-    /// The flake must have an output `.lambdas`.
-    pub fn for_flake_spec(spec: &str, flake_slug: &str) -> Result<Self> {
+    /// The flake must have an output `.lambdas`, which is an attribute set mapping `<flake>.<package path>` to the callPackage-style lambda corresponding to that package.
+    pub fn for_flake_spec(spec: &str) -> Result<Self> {
         let out = Command::new("nix")
-            .args(["eval", &format!("{spec}.lambdas")])
+            .args(["eval", &format!("{spec}#lambdas")])
             .output()?;
 
+        let outp = String::from_utf8(out.stdout)?;
         if !out.status.success() {
-            bail!("error in nix eval");
+            bail!(
+                "error in nix eval: {} {}",
+                outp,
+                if let Ok(s) = String::from_utf8(out.stderr) {
+                    s
+                } else {
+                    "invalid utf8 in stderr".to_string()
+                }
+            );
         }
-        let out = String::from_utf8(out.stdout)?;
 
-        Self::from_eval_output(&out, flake_slug)
+        Self::from_eval_output(&outp)
     }
 
-    /// Extract locations of lambdas from the output of `nix eval`.
-    pub fn from_eval_output(out: &str, flake_slug: &str) -> Result<Self> {
+    /// Extract locations of lambdas from the output of `nix eval registry#lambdas`.
+    pub fn from_eval_output(out: &str) -> Result<Self> {
         // Replace <<lambda>> bits with strings
         let re = Regex::new(r"«lambda [^@]*@ ([^»]*)»").unwrap();
         let out = re.replace_all(out, r#""$1""#);
@@ -53,13 +61,13 @@ impl PackageLocations {
         };
 
         let mut this = Self(Default::default());
-        this.walk_attrset("", &attrs, flake_slug)?;
+        this.walk_attrset("", &attrs)?;
 
         Ok(this)
     }
 
     /// Walk the parsed attribute set, adding encountered lambdas. `prefix` is used to deal with recursive attribute sets.
-    fn walk_attrset(&mut self, prefix: &str, set: &AttrSet, flake_slug: &str) -> Result<()> {
+    fn walk_attrset(&mut self, prefix: &str, set: &AttrSet) -> Result<()> {
         // note that we only have to parse the output of `nix eval`, so we can limit things a bit
         for entry in set.entries() {
             if let ast::Entry::AttrpathValue(attrpath_value) = entry {
@@ -83,10 +91,11 @@ impl PackageLocations {
                 let pos = Self::get_lambda_position(s)
                     .ok_or_else(|| anyhow!("failed to extract lambda position"))?;
 
+                let name = format!("{prefix}{name}");
                 self.0.push(Package {
-                    name: format!("{prefix}{name}"),
+                    flake_slug: name.split(".").next().unwrap().to_string(),
+                    name,
                     pos,
-                    flake_slug: flake_slug.to_string(),
                 });
             }
         }

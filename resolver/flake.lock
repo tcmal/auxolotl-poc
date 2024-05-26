@@ -1,0 +1,61 @@
+{
+  "nodes": {
+    "auxlib": {
+      "locked": {
+        "lastModified": 1,
+        "narHash": "sha256-aJZzu9gRLOcf6YN1/103azIGSVty/Fh3C+Q7qEHsT3Q=",
+        "path": "../lib",
+        "type": "path"
+      },
+      "original": {
+        "path": "../lib",
+        "type": "path"
+      }
+    },
+    "crane": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1716680724,
+        "narHash": "sha256-THm0mm4aKHQhh3pXCj5ms5t0sVPP9xzVsIU9byMjbtI=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "701dbc191ca003a118ce885db38fae9598908294",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1701282334,
+        "narHash": "sha256-MxCVrXY6v4QmfTwIysjjaX0XUhqBbxTWWB4HXtDYsdk=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "057f9aecfb71c4437d2b27d3323df7f93c010b7e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "23.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "auxlib": "auxlib",
+        "crane": "crane",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
