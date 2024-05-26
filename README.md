@@ -33,14 +33,19 @@ Our proof-of-concept has these repositories:
   - `registry` - generated nix code, which pulls in `core` and sig repos and wires them all together.
   - `resolver` - code to generate the `registry`
 
+As a demo, we 'provide' the following package tree, where the first part of the package name is just the flake that it comes from.
+Note that `core` and `python` depend on packages from each other: this is what we want to be able to deal with.
+
+![](registry/pkgs.svg)
+
+There isn't really code to build these packages right now: all we're focused on here is dealing with the dependencies, so it would only be a distraction.
+For similar reasons, we only have 2 phases of bootstrapping rather than the actual 6.
+
 ### Writing packages
 
 Actual package code goes in `core` or one of the sig repos, using the [`by-name` convention](https://github.com/NixOS/nixpkgs/blob/master/pkgs/by-name/README.md). In practice, some packages might need more complex code (particularly stdenv/bootstrapping stuff).
 
 For packages, we expect the same `callPackage` style that `nixpkgs` uses: A lambda which destructures the dependencies it needs from its argument, and ignores everything else.
-
-TODO: nested attribute set dependencies.
-TODO: not just packages - functions, etc.
 
 For example, `hello` as defined in `core/by-name/he/hello/default.nix`:
 
@@ -55,6 +60,12 @@ stdenv.mkDerivation rec {
     sha256 = "sha256-jZkUKv2SV28wsM18tCqNxoCZmLxdYH2Idh9RLibH2yA=";
   };
 }
+```
+
+If we depend on a child attribute, not the top-level one, then we provide a default for our argument that shows the structure it should have. For example, `phase1.stdenv` depends on `phase0.stdenv` like so:
+
+```nix
+phase1.stdenv = { phase0 ? {stdenv = {};} , ...}: throw "todo";
 ```
 
 Note that there are no flake dependencies between `core`, `python`, etc.
@@ -96,22 +107,25 @@ registry/ $ nix eval .#lambdas
 let
   # Packages with no dependencies
   lvl0 = { } // {
-    stdenv = core.stdenv { inherit (lvl2); };
-    gcc = core.gcc { inherit (lvl2); };
-    fetchurl = core.fetchurl { inherit (lvl2); };
+    phase0.bootstrap-tools = core.phase0.bootstrap-tools { };
   };
 
   # Packages depending on things in lvl0
   lvl1 = lvl0 // {
-    hello = core.hello { inherit (lvl2) fetchurl stdenv; };
+    phase0.stdenv = core.phase0.stdenv { phase0.bootstrap-tools = lvl6.phase0.bootstrap-tools; };
   };
 
-  # Packages depending on things in lvl1, lvl0
-  lvl2 = lvl1 // {
-    goodbye = extra.goodbye { inherit (lvl2) hello fetchurl stdenv; };
+  # ...
+
+  # Packages depending on things from lvl5 to lvl0
+  lvl6 = lvl5 // {
+    python3Packages.python-nix = python.python3Packages.python-nix {
+      nix = lvl6.nix;
+      python3 = lvl6.python3;
+    };
   };
 in
-lvl2
+lvl6
 ```
 
 We also render our dependency graph with graphviz and put it in `registry/pkgs.svg`.
